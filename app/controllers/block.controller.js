@@ -2,11 +2,8 @@
 const memo = require('memory-cache');
 
 const Block = require('./../models/block.model');
-const Blockchain = require('./../services/simple-chain');
+const blockchain = require('./../services/blockchain.service');
 const helpers = require('./../shared/helpers');
-
-
-const blockchain = new Blockchain();
 
 // Add new Block
 exports.addBlock = async (req, res) => {
