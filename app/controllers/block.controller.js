@@ -1,5 +1,4 @@
 /*jshint esversion: 6 */
-const memo = require('memory-cache');
 
 const Block = require('./../models/block.model');
 const blockchain = require('./../services/blockchain.service');
@@ -8,10 +7,10 @@ const helpers = require('./../shared/helpers');
 // Add new Block
 exports.addBlock = async (req, res) => {
 
+  let { validatedAddresses } = req.app.locals;
   let { address, star } = req.body;
-  let memoAddress = memo.get(address) || {};
 
-  if(memoAddress) {
+  if(validatedAddresses[address]) {
     let { ra, dec, story } = star;
 
     if (ra && dec && story) {
@@ -30,7 +29,10 @@ exports.addBlock = async (req, res) => {
 
         const newBlock = new Block(body);
         await blockchain.addBlock(newBlock);
-        memo.del(address);
+
+        // Force a wallet to verify again for further star registries
+        delete validatedAddresses[address];
+
         res.send(newBlock);
 
     } else {
@@ -57,6 +59,8 @@ exports.getBlock = async (req, res) => {
           message: "Block not found with height " + req.params.height
         });
     }
+
+    block.body.star.storyDecoded = helpers.hexToString(block.body.star.story);
     res.send(block);
 
   } catch(err) {
@@ -74,7 +78,7 @@ exports.getBlock = async (req, res) => {
 // Retrieve and return blocks size.
 exports.getBlockHeight = async (req, res) => {
   try{
-    let size = await blockchain.getBlockHeight()
+    let size = await blockchain.getBlockHeight();
 
     res.send(`block size ${size}`);
 
@@ -88,7 +92,7 @@ exports.getBlockHeight = async (req, res) => {
 // Retrieve and return chain.
 exports.getChain = async (req, res) => {
   try{
-    let chain = await blockchain.getChain()
+    let chain = await blockchain.getChain();
 
     res.send(chain);
 

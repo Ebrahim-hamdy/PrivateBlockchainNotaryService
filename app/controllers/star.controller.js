@@ -2,8 +2,8 @@ const blockchain = require('./../services/blockchain.service');
 const helpers = require('./../shared/helpers');
 
 exports.findByHash = async (req, res) => {
-    const hash = req.params.hash;
-    console.log('hash', hash);
+    const hash = req.params.hash.substring(1);
+
     try {
         let block = await blockchain.getBlockByHash(hash);
 

@@ -1,58 +1,48 @@
 /*jshint esversion: 6 */
 const bitcoinMessage = require('bitcoinjs-message');
-const memo = require('memory-cache');
 
 const helper = require('./../shared/helpers');
 
 const ValidatorResponse = require('./../models/validator-response.model');
 
 
-validateAddress = async(address) => {
+exports.addressValidator = async (req, res) => {
+    
+    let { validationRequests } = req.app.locals;
+    let { address } = req.body;
 
-    let memoAddress = memo.get(address);
-    let validationWindow = 300;
-    let curretTimeStamp = new Date()
-                              .getTime()
-                              .toString()
-                              .slice(0, -3);
-
-    if(memoAddress) {
-
-        let elapsedTimeStamp = (curretTimeStamp - memoAddress.requestTimeStamp) / 1000;
-            memoAddress.validationWindow = validationWindow - elapsedTimeStamp;
-
-        if(elapsedTimeStamp.validationWindow === 0) {
-            memo.del(address);
-            return ('Validation window expired. Please re-start validation process.');
+        // Validate request
+        if(helper.isEmptyOrSpaces(address) || Object.keys(req.body).length === 0) {
+            return res.status(400).send({
+              message: "Address can not be empty"
+            });
         }
 
-        return memoAddress;
+        let validationWindow = 300;
+        let curretTimeStamp = new Date()
+                                  .getTime()
+                                  .toString()
+                                  .slice(0, -3);
 
-    } else {
+        if(validationRequests[address]) {
+            let elapsedTimeStamp = (curretTimeStamp - validationRequests[address].requestTimeStamp);
+                validationRequests[address].validationWindow = validationWindow - elapsedTimeStamp;
 
-        let validatorResponse = new ValidatorResponse(address);
-        memo.put(validatorResponse.address, validatorResponse);
-        return validatorResponse;
-    }
-}
+            if(validationRequests[address].validationWindow === 0) {
+                delete validationRequests[address];
+            }
 
-exports.addressValidator = async (req, res) => {
-    let address = req.body.address;
+        } else {
+            validationRequests[address] = new ValidatorResponse(address);
+        }
 
-    // Validate request
-    if(helper.isEmptyOrSpaces(address) || Object.keys(req.body).length === 0) {
-        return res.status(400).send({
-          message: "Address can not be empty"
-        });
-    }
-
-    let validAddress = await validateAddress(address);
-    res.send(validAddress);
+        res.send(validationRequests[address]);
 }
 
 exports.signatureValidator = async (req, res) => {
-    let signature = req.body.signature;
-    let address = req.body.address;
+
+    let { validationRequests, validatedAddresses } = req.app.locals;
+    let { address, signature } = req.body;
 
     // Validate request
     if(helper.isEmptyOrSpaces(signature) || helper.isEmptyOrSpaces(address) || Object.keys(req.body).length === 0) {
@@ -61,14 +51,30 @@ exports.signatureValidator = async (req, res) => {
         });
     }
 
-    let validationReq = await validateAddress(address);
-    let registerStar = bitcoinMessage.verify(validationReq.message, validationReq.address, signature);
-    
-    memo.put(validationReq.message, validationReq);
-    validationReq['messageSignature'] = registerStar ? 'valid' : 'invalid';
+    if(validationRequests[address]) {
+        let message = validationRequests[address].message;
 
-    res.send({
-        "registerStar": registerStar,
-         "status": validationReq
-    });
+        // Verify signature
+        let registerStar = bitcoinMessage.verify(message, address, signature);
+
+        if(registerStar) {
+            validationRequests[address].messageSignature = 'valid';
+            validatedAddresses[address] = true;
+
+        } else {
+            validationRequests[address].messageSignature = 'invalid';
+        }
+
+        res.send({
+            registerStar,
+             status: validationRequests[address]
+        });
+
+    } else {
+        return res.status(404).send({
+          message: `Address ${address} not found`
+        });
+    }
+
+
 }
