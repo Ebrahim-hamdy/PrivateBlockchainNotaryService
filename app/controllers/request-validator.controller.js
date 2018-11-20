@@ -52,14 +52,18 @@ exports.signatureValidator = async (req, res) => {
     }
 
     if(validationRequests[address]) {
-        let message = validationRequests[address].message;
+        let validRequest = validationRequests[address];
+        let message = validRequest.message;
 
         // Verify signature
         let registerStar = bitcoinMessage.verify(message, address, signature);
 
         if(registerStar) {
-            validationRequests[address].messageSignature = 'valid';
+
+            validRequest.messageSignature = 'valid';
             validatedAddresses[address] = true;
+
+            delete validationRequests[address];
 
         } else {
             validationRequests[address].messageSignature = 'invalid';
@@ -67,7 +71,7 @@ exports.signatureValidator = async (req, res) => {
 
         res.send({
             registerStar,
-             status: validationRequests[address]
+             status: validRequest
         });
 
     } else {
